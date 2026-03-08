@@ -10,11 +10,12 @@ class MLP(nn.Module):
         self.fc1 = nn.Linear(3 * 32 * 32, 1024)
         self.fc2 = nn.Linear(1024, 512)
         self.fc3 = nn.Linear(512, 10)
+        self.dropout = nn.Dropout(0.3)
 
     def forward(self, x):
         x = self.flatten(x)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = self.dropout(F.relu(self.fc1(x)))
+        x = self.dropout(F.relu(self.fc2(x)))
         x = self.fc3(x)
         return x
 

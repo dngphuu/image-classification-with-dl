@@ -1,3 +1,7 @@
+import os
+import warnings
+warnings.filterwarnings("ignore", category=Warning, message=".*align should be passed as Python or NumPy boolean.*")
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -101,19 +105,35 @@ def main():
     print(f"===== Đang chạy với thiết bị phần cứng: {device} =====")
     
     # 1. Pipeline Chuẩn bị dữ liệu
-    transform = transforms.Compose([
+    # Bias-variance tradeoff: áp dụng Data Augmentation cho Train
+    transform_train = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    
+    # Không dùng Data Augmentation cho Valid và Test
+    transform_test = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
     
     print("\n--- TẢI TẬP DỮ LIỆU CIFAR-10 ---")
-    full_train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+    full_train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+    val_eval_dataset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_test)
+    test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
     
     # Phân chia 50k train set thành tập Train (40k) và Validation (10k)
     train_size = 40000
     val_size = 10000
-    train_dataset, val_dataset = random_split(full_train_dataset, [train_size, val_size])
+    
+    # Cố định seed cho generator để đảm bảo Validation set được tách ra giống hệt nhau ở cả 2 transform
+    generator = torch.Generator().manual_seed(42)
+    train_dataset, _ = random_split(full_train_dataset, [train_size, val_size], generator=generator)
+    
+    generator = torch.Generator().manual_seed(42) # Reset seed
+    _, val_dataset = random_split(val_eval_dataset, [train_size, val_size], generator=generator)
     
     batch_size = 64
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
@@ -125,7 +145,7 @@ def main():
     # Siêu tham số
     epochs = 15
     criterion = nn.CrossEntropyLoss()
-    learning_rate = 0.001
+    learning_rate = 0.0005 # Giảm learning rate theo feedback từ 0.001 -> 0.0005
     
     # 2. Khởi tạo và Huấn luyện MLP
     print("\n[INFO] Bắt đầu huấn luyện mô hình MLP (Multi-Layer Perceptron)...")
@@ -150,10 +170,19 @@ def main():
     test_acc_cnn, y_true_cnn, y_pred_cnn = evaluate_model(cnn_model, test_loader, device)
     print(f"-> Độ chính xác của CNN (Test Acc): {test_acc_cnn:.2f}%")
     
-    print("\n--- TẠO VÀ LƯU BIỂU ĐỒ (LEARNING CURVES VÀ CONFUSION MATRIX) ---")
-    plot_learning_curves(history_mlp, history_cnn, filename='learning_curves.png')
-    plot_confusion_matrix(y_true_mlp, y_pred_mlp, classes, title='MLP Confusion Matrix', filename='confusion_matrix_mlp.png')
-    plot_confusion_matrix(y_true_cnn, y_pred_cnn, classes, title='CNN Confusion Matrix', filename='confusion_matrix_cnn.png')
+    print("\n--- LƯU KẾT QUẢ (MÔ HÌNH VÀ BIỂU ĐỒ) VÀO THƯ MỤC 'RESULT' ---")
+    result_dir = 'result'
+    os.makedirs(result_dir, exist_ok=True)
+    
+    # Lưu trọng số mô hình
+    torch.save(mlp_model.state_dict(), os.path.join(result_dir, 'mlp_model.pth'))
+    torch.save(cnn_model.state_dict(), os.path.join(result_dir, 'cnn_model.pth'))
+    print(f"-> Đã lưu trọng số mô hình vào thư mục '{result_dir}/'")
+
+    # Lưu biểu đồ
+    plot_learning_curves(history_mlp, history_cnn, filename=os.path.join(result_dir, 'learning_curves.png'))
+    plot_confusion_matrix(y_true_mlp, y_pred_mlp, classes, title='MLP Confusion Matrix', filename=os.path.join(result_dir, 'confusion_matrix_mlp.png'))
+    plot_confusion_matrix(y_true_cnn, y_pred_cnn, classes, title='CNN Confusion Matrix', filename=os.path.join(result_dir, 'confusion_matrix_cnn.png'))
     
     print("\n===== HOÀN TẤT BÀI TẬP LỚN ÚNG DỤNG CIFAR-10 =====")
 

@@ -1,80 +1,37 @@
-# Báo cáo Bài tập 2: Phân loại ảnh với tập dữ liệu CIFAR-10
+# Báo cáo Assignment 2: Phân loại ảnh với tập dữ liệu CIFAR-10
 
-**Kính gửi Thầy/Cô,**
+## 1. Chuẩn bị dữ liệu (Data Pipeline)
+Tập dữ liệu CIFAR-10 gồm 50.000 ảnh tập huấn luyện (train) và 10.000 ảnh tập kiểm thử (test) với kích thước 32x32 pixel. Tôi đã chia 50.000 ảnh này thành tập huấn luyện (40.000 ảnh) và tập xác thực (10.000 ảnh) để tiện cho quá trình theo dõi hiệu năng mô hình, tránh việc bị overfitting (quá khớp).
 
-Dưới đây là báo cáo chi tiết về kết quả thực hiện Bài tập 2 của nhóm chúng em. Mục tiêu của bài tập là xây dựng và so sánh hai mô hình mạng nơ-ron: Multi-Layer Perceptron (MLP) và Convolutional Neural Network (CNN) trong việc phân loại ảnh từ tập dữ liệu CIFAR-10. Dự án được triển khai bằng ngôn ngữ Python, sử dụng thư viện **PyTorch**.
+**Phương pháp áp dụng:**
+*   **Data Augmentation (Tăng cường dữ liệu):** Áp dụng phép biến đổi ảnh: `RandomHorizontalFlip` (lật ngang ảnh) và `RandomRotation(10)` (xoay ngẫu nhiên 10 độ).
+    *   *Tại sao lại dùng?* Việc làm phong phú dạng dữ liệu đầu vào giúp mô hình học được nhiều đặc trưng hơn, nâng cao độ tổng quát hóa của mô hình trên tập dữ liệu chưa từng thấy. Tôi chỉ áp dụng phép xoay, lật cho tập Train, còn Valid và Test vẫn giữ nguyên để đánh giá khách quan nhất hiệu suất.
+*   **Chuyển đổi Tensor & Chuẩn hóa (Normalization):** Dùng `(0.5, 0.5, 0.5)` trên 3 kênh màu RGB để biến các giá trị của ảnh về miền `[-1, 1]`.
+    *   *Tại sao lại dùng?* Việc chuẩn hóa giúp cho giá trị gradient lan truyền ngược (backpropagation) được ổn định hơn, từ đó cải thiện tốc độ hội tụ của tiến trình gradient descent.
 
-## 1. Mở đầu
+## 2. Xây dựng cấu trúc mạng (Models)
 
-Bài tập yêu cầu nhóm thực hiện các tác vụ sau:
-- Xây dựng mạng MLP cơ bản với 3 layer.
-- Xây dựng mạng CNN với 3 convolution layer.
-- Huấn luyện, đánh giá (validation) và kiểm thử (testing) cả 2 mô hình trên tập CIFAR-10.
-- Vẽ **Learning Curves** và **Confusion Matrix**.
-- So sánh, phân tích các kết quả đạt được.
+### 2.1 Cấu trúc MLP (Multi-Layer Perceptron)
+*   **Thiết kế:** Dữ liệu ảnh đầu vào ($3 \times 32 \times 32 = 3072$) được đưa qua lớp `Flatten()` thành vector 1D (3072 chiều). Sau đó đưa qua 3 lớp kết nối đầy đủ (Fully Connected/Linear Layers). Số lượng perceptron trên các hidden layer lần lượt theo chuỗi: `3072 -> 1024 -> 512 -> 10`. Đưa thêm hàm kích hoạt `ReLU` và `Dropout (0.3)` chèn vào giữa các tầng ẩn.
+*   **Tại sao lại chọn cấu trúc này?** Việc giảm dần số lượng perceptron giúp mạng nén thông tin từ từ, tự chắt lọc các biểu diễn mức cao (high-level representations) về con số 10 lớp phân loại đầu ra cơ bản.
+*   **Dropout (0.3):** Ngẫu nhiên "tắt" đi 30% kết nối nhằm tránh việc mạng phụ thuộc quá nhiều vào một lượng cực nhỏ đặc trưng nhiễu, buộc các nơ-ron còn lại cũng phải học chung nhiều thuộc tính tốt. Đây là một cơ chế giúp cho MLP không bị "thuộc lòng" tập điểm số ảo từ tập train.
 
-Để đáp ứng quy định của công cụ phát triển, dự án bắt buộc sử dụng `uv` làm trình quản lý thư viện Python (môi trường, dependencies sẽ được tự động cài đặt qua `uv`).
+### 2.2 Cấu trúc CNN (Convolutional Neural Network)
+*   **Thiết kế:** CNN gồm 3 lớp Tích chập (Convolution Layers), số lượng filters tăng dần: `32 -> 64 -> 128`. Kích thước bộ lọc (kernel_size) là bằng 3x3, kết hợp với `padding=1` để không bị thu nhỏ kích thước ngay sau việc quét ma trận. Sau mỗi lớp Conv2d là hàm non-linear `ReLU` và lớp `MaxPool2d` kích thước 2x2.
+*   Sau 3 lần MaxPooling, vector đầu ra sẽ được dẹt lại qua `Flatten()` (kích thước $128 \times 4 \times 4 = 2048$) rồi phân loại qua hai tầng linear: `2048 -> 256 -> 10`.
+*   **Tại sao lại chọn cấu trúc này?** CNN vốn rất vượt trội trong việc xử lý hình ảnh nhờ khả năng trích xuất các đặc trưng không gian (như góc, cạnh, đường cong mặt, hình khối) thông qua các ma trận quét đặc trưng. Kích thước MaxPooling giảm số lượng tham số cần đào tạo khổng lồ, đồng thời đảm bảo được tính kháng nhẹ dịch chuyển trong bức ảnh (bất biến cục bộ / translation invariance).
 
-## 2. Hướng dẫn cài đặt và sử dụng
+## 3. Huấn luyện (Training) & Đánh giá (Testing)
 
-Dự án này sử dụng công cụ quản lý gói **`uv`** (trình quản lý gói siêu tốc cho Python).
-Để chạy lại toàn bộ mô hình và kiểm tra kết quả, Thầy/Cô vui lòng thực hiện:
+**Phương pháp huấn luyện:**
+*   **Hàm mất mát (Loss Function) - `CrossEntropyLoss`:** Tại sao? Hai mô hình đều thuộc bài toán phân loại đa lớp độc lập. Hàm Loss này rất phù hợp nhờ việc kết hợp tối ưu lớp Softmax với hàm Log-Loss. Kết quả mang tính thống kê cao để cập nhật sai số.
+*   **Thuật toán tối ưu (Optimizer) - `Adam`:** Tại sao? Thay vì dùng SGD thông thường, Adam sử dụng cả 2 mô-men hàm động lượng. Quá trình hội tụ diễn ra tự thích ứng và nhạy bén với từng trọng số hơn so với SGD, dễ tránh được các trũng gradient xấu.
+*   **Học suất (Learning Rate):** Set cứng bằng `0.0005`.
+*   **Vòng lặp (Epochs) = 15 & Batch size = 64:** Batch lớn giúp tối ưu tốt hơn tài nguyên phần cứng, nhưng 64 thay vì cao hơn giúp duy trì thuật toán học còn tính cực bộ nhiễu.
 
-```bash
-# Cài đặt môi trường ảo và thư viện thông qua uv
-uv venv
-uv pip install -r requirements.txt # hoặc uv sync (nếu chạy dạng project)
+## 4. Tổng kết đánh giá (Learning Curves & Confusion Matrix)
+*   **Đường cong học tập (Learning curves):** Đồ thị này theo dõi Accuracy/Loss ở Train và Validation (nằm ở thư mục `result/learning_curves.png`). Phân tích trực diện biểu đồ có thể nhận diện ngay trạng thái chuẩn hay Underfitting, Overfitting.
+*   **Ma trận nhầm lẫn (Confusion Matrix):** Sử dụng thư viện vẽ lên ma trận trực quan (nằm ở `result/confusion_matrix_...`). Phương pháp này chỉ ngay mẫu/nhãn cụ thể nào mô hình thường xuyên gán sai vào những class nào nhất (VD: con chó hay bị nhìn ra con mèo do tương quan lớn so với máy bay).
 
-# Cách tốt nhất để chạy với uv trực tiếp (tự cài library trong command):
-uv run --with torch --with torchvision --with matplotlib --with seaborn --with scikit-learn main.py
-```
-
-Khi chạy tập tin `main.py`, hệ thống sẽ tự động tải dataset CIFAR-10, phân chia train/val/test data, khởi tạo và huấn luyện 2 mô hình, sau đó trực tiếp xuất các biểu đồ so sánh vào thư mục gốc (`learning_curves.png`, `confusion_matrix_mlp.png`, `confusion_matrix_cnn.png`).
-
-## 3. Kiến trúc Mô hình
-
-### 3.1. Mô hình Multi-Layer Perceptron (MLP)
-Mô hình MLP được thiết kế với 3 lớp fully-connected (tương đương với 3 block Linear layers):
-- **Lớp đầu vào**: Tensor ảnh 3x32x32 được duỗi phẳng (flatten) thành vector 3072 chiều.
-- **Hidden Layer 1**: `Linear(3072, 1024)` -> `ReLU`.
-- **Hidden Layer 2**: `Linear(1024, 512)` -> `ReLU`.
-- **Output Layer**: `Linear(512, 10)` (Tương ứng với 10 nhãn của tập CIFAR-10).
-
-### 3.2. Mô hình Convolutional Neural Network (CNN)
-Mô hình CNN được thiết kế với 3 lớp tích chập (convolutional layers) trích xuất đặc trưng, mỗi lớp theo sau là một hàm kích hoạt ReLU và Max Pooling nhằm giảm không gian đặc trưng nhưng giữ lại thông tin cốt lõi:
-- **CNN Layer 1**: `Conv2d(3, 32, ker=3, pad=1)` -> `ReLU` -> `MaxPool2d(2)`. Kích thước không gian giảm từ 32x32 xuống 16x16.
-- **CNN Layer 2**: `Conv2d(32, 64, ker=3, pad=1)` -> `ReLU` -> `MaxPool2d(2)`. Không gian: 8x8.
-- **CNN Layer 3**: `Conv2d(64, 128, ker=3, pad=1)` -> `ReLU` -> `MaxPool2d(2)`. Không gian: 4x4.
-- **Classifier Class**: Flatten feature maps `128*4*4` và truyền qua các lớp Linear (`Linear(2048, 256) -> ReLU -> Linear(256, 10)`) để tính toán đầu ra lớp.
-
-## 4. Quá trình Huấn luyện và Đánh giá
-
-### Thiết lập Train/Val/Test
-- Tập huấn luyện `train` có sẵn từ CIFAR-10 (50k hình ảnh) được tách thành: **Train Set (40,000 ảnh)** và **Validation Set (10,000 ảnh)**.
-- Tập **Test Set (10,000 ảnh)** được dùng riêng cho việc đánh giá độ chuẩn xác thực tế vào cuối.
-
-### Cấu hình
-- **Hàm mất mát (Loss Function)**: `CrossEntropyLoss`.
-- **Thuật toán tối ưu hoá (Optimizer)**: Nhóm sử dụng `Adam` với Learning rate `0.001` vì khả năng hội tụ nhanh và ổn định.
-- **Số chu kì (Epochs)**: Đặt ở mức 15-20 epochs, vừa đủ để quan sát hiệu suất mô hình trong điều kiện tài nguyên giới hạn.
-
-## 5. Kết quả Thực nghiệm & Phân tích
-
-Sau khi thực thi hàm huấn luyện cho cả MLP và CNN, nhóm ghi nhận sự thay đổi của hàm mất mát (loss) và độ chính xác (accuracy) qua từng epoch. Dữ liệu này được biểu diễn ở file **`learning_curves.png`**.
-
-Bên cạnh đó, việc phân loại nhầm giữa những nhãn có nét tương đồng cao (trực quan) được biểu thị rõ rệt trên biểu đồ ma trận nhầm lẫn **`confusion_matrix_mlp.png`** và **`confusion_matrix_cnn.png`**.
-
-### So sánh khả năng phân loại
-- **Mô hình MLP**:
-  - Tốc độ huấn luyện trên epoch rất nhanh (do phép toán thuần tuý số học ma trận).
-  - Khả năng tổng quát hóa kém: Khi mạng lớn (nhiều parameter như lớp `3072 -> 1024`), hiện tượng *Overfitting* xảy ra rất rệt trên Learning curve (Train Loss giảm nhưng Val Loss có xu hướng chững lại hoặc tăng lên, Train Acc tăng cao nhưng Val Acc thấp ~50%).
-  - Lí do là MLP phớt lờ cấu trúc không gian (spatial features) của hình ảnh mà xem các điểm ảnh rời rạc.
-
-- **Mô hình CNN**:
-  - Yêu cầu khả năng tính toán cao hơn do có nhiều phép nhân chập trên khối ma trận.
-  - Vượt trội về độ chính xác: Việc chia sẻ trọng số (Weight sharing) và tận dụng mối liên kết không gian từ Kernels giúp CNN trích xuất được các vạch, góc, rồi tổng hợp thành các feature có ý nghĩa. CNN đem lại Accuracy cao hơn rõ rệt (có thể đạt ~70% trên Validation/Test chỉ sau 15-20 epochs với model đơn giản này) và ít Overfitting hơn so với MLP.
-
-### Tổng kết
-Mô hình CNN luôn là lựa chọn ưu tiên dành cho bài toán phân tích và xử lý ảnh (Computer Vision). Bài tập cung cấp góc nhìn nền tảng, minh chứng lợi thế vượt bậc của Convolution Layer trước Fully Connected Layer khi làm việc trực tiếp với dữ liệu không gian nhiều chiều như hình ảnh.
-
-*Một lần nữa cảm ơn Thầy/Cô đã theo dõi và đánh giá báo cáo hoàn thiện Bài tập 2 của tụi em!*
+*   **So sánh tổng quan hai cấu trúc mạng:**
+    Theo biểu đồ, **CNN** chứng minh khả năng vượt qua xa với Test Accuracy vượt trội và ổn định hơn so với **MLP**. Lý do là MLP thực chất phá dỡ trật tự không gian mảng (chia làm vector 1D) nên mất sạch thông tin quan hệ lân cận giữa các điểm ảnh kề nhau, trong khi CNN duy trì trọn vẹn đặc trưng lưới 2 chiều này hiệu quả cao nhất. Dù vậy, cả 2 mô hình đã phản ánh rõ rệt các lý thuyết kinh điển đối với bài toán này.
