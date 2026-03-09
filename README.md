@@ -1,14 +1,14 @@
 # Báo cáo Assignment 2: Phân loại ảnh với tập dữ liệu CIFAR-10
 
 ## 1. Chuẩn bị dữ liệu (Data Pipeline)
-Tập dữ liệu CIFAR-10 gồm 50.000 ảnh tập huấn luyện (train) và 10.000 ảnh tập kiểm thử (test) với kích thước 32x32 pixel. Tôi đã chia 50.000 ảnh này thành tập huấn luyện (40.000 ảnh) và tập xác thực (10.000 ảnh) để tiện cho quá trình theo dõi hiệu năng mô hình, tránh việc bị overfitting (quá khớp).
+Tập dữ liệu CIFAR-10 gồm 50.000 ảnh tập huấn luyện (train) và 10.000 ảnh tập kiểm thử (test) với kích thước 32x32 pixel. 50.000 ảnh này chia thành thành tập huấn luyện (40.000 ảnh) và tập xác thực (10.000 ảnh) để tiện cho quá trình theo dõi hiệu năng mô hình, tránh việc bị overfitting.
 
 **Phương pháp áp dụng:**
 *   **Data Augmentation (Tăng cường dữ liệu):** Áp dụng phép biến đổi ảnh: `RandomHorizontalFlip` (lật ngang ảnh) và `RandomRotation(10)` (xoay ngẫu nhiên 10 độ).
-    *   *Tại sao lại dùng?* Việc làm phong phú dạng dữ liệu đầu vào giúp mô hình học được nhiều đặc trưng hơn, nâng cao độ tổng quát hóa của mô hình trên tập dữ liệu chưa từng thấy. Tôi chỉ áp dụng phép xoay, lật cho tập Train, còn Valid và Test vẫn giữ nguyên để đánh giá khách quan nhất hiệu suất.
+    *   *Tại sao lại dùng?* Việc làm phong phú dạng dữ liệu đầu vào giúp mô hình học được nhiều đặc trưng hơn, nâng cao độ tổng quát hóa của mô hình trên tập dữ liệu chưa từng thấy. Chỉ áp dụng phép xoay, lật cho tập Train, còn Valid và Test vẫn giữ nguyên.
 *   **Chuyển đổi Tensor & Chuẩn hóa (Normalization):** Dùng `(0.5, 0.5, 0.5)` trên 3 kênh màu RGB để biến các giá trị của ảnh về miền `[-1, 1]`.
     *   *Tại sao lại dùng?* Việc chuẩn hóa giúp cho giá trị gradient lan truyền ngược (backpropagation) được ổn định hơn, từ đó cải thiện tốc độ hội tụ của tiến trình gradient descent.
-
+C
 ## 2. Xây dựng cấu trúc mạng (Models)
 
 ### 2.1 Cấu trúc MLP (Multi-Layer Perceptron)
@@ -34,4 +34,4 @@ Tập dữ liệu CIFAR-10 gồm 50.000 ảnh tập huấn luyện (train) và 1
 *   **Ma trận nhầm lẫn (Confusion Matrix):** Sử dụng thư viện vẽ lên ma trận trực quan (nằm ở `result/confusion_matrix_...`). Phương pháp này chỉ ngay mẫu/nhãn cụ thể nào mô hình thường xuyên gán sai vào những class nào nhất (VD: con chó hay bị nhìn ra con mèo do tương quan lớn so với máy bay).
 
 *   **So sánh tổng quan hai cấu trúc mạng:**
-    Theo biểu đồ, **CNN** chứng minh khả năng vượt qua xa với Test Accuracy vượt trội và ổn định hơn so với **MLP**. Lý do là MLP thực chất phá dỡ trật tự không gian mảng (chia làm vector 1D) nên mất sạch thông tin quan hệ lân cận giữa các điểm ảnh kề nhau, trong khi CNN duy trì trọn vẹn đặc trưng lưới 2 chiều này hiệu quả cao nhất. Dù vậy, cả 2 mô hình đã phản ánh rõ rệt các lý thuyết kinh điển đối với bài toán này.
+    Theo biểu đồ, **CNN** chứng minh khả năng vượt qua xa với Test Accuracy vượt trội và ổn định hơn so với **MLP**. Lý do là MLP thực chất phá dỡ trật tự không gian mảng (chia làm vector 1D) nên mất sạch thông tin quan hệ lân cận giữa các điểm ảnh kề nhau, trong khi CNN duy trì trọn vẹn đặc trưng lưới 2 chiều này hiệu quả cao nhất.
