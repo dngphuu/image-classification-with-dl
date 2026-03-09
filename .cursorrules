@@ -1,8 +1,0 @@
-# Antigravity IDE AI Rules
-
-Theo quy định của dự án này, AI (Antigravity IDE AI) BẮT BUỘC phải tuân thủ các quy tắc sau:
-
-1. **Sử dụng `uv`**: BẮT BUỘC sử dụng `uv` làm trình quản lý gói Python (Python Package Manager).
-2. **Không sử dụng các trình quản lý khác**: TUYỆT ĐỐI không sử dụng `pip`, `poetry`, `conda`, `pipenv` hay các công cụ quản lý gói nào khác ngoài `uv`.
-3. **Quản lý môi trường**: Sử dụng `uv venv` để tạo môi trường ảo và `uv add <package>` để cài đặt các thư viện mới.
-4. **Thực thi mã nguồn**: Ưu tiên sử dụng `uv run <script>` để chạy các tệp Python trong dự án.
